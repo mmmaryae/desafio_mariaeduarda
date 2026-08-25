@@ -62,3 +62,43 @@ top_10_suspeitos = listar_top_10_suspeitos(df, suspeitos_fracionamento)
 print("Top 10 clientes mais sinalizados:")
 for cliente, flags in top_10_suspeitos:
     print(f"{cliente}: sinalizado por {flags} regra(s)")
+
+def ferramenta_historico_cliente(df, cliente_id):
+    operacoes = df[df["cliente_id"] == cliente_id]
+    return {
+        "cliente": cliente_id,
+        "total_operacoes": len(operacoes),
+        "soma_total": float(operacoes["valor_brl"].sum()),
+        "mediana": float(operacoes["valor_brl"].median())
+    }
+
+def ferramenta_operacoes_do_dia(df, cliente_id, data):
+    operacoes = df[(df["cliente_id"] == cliente_id) & (df["data"] == data)]
+    return {
+        "cliente": cliente_id,
+        "data": data,
+        "quantidade": len(operacoes),
+        "soma": float(operacoes["valor_brl"].sum())
+    }
+
+def ferramenta_perfil_por_canal(df, cliente_id):
+    operacoes = df[df["cliente_id"] == cliente_id]
+    contagem = operacoes["canal"].value_counts().to_dict()
+    return {
+        "cliente": cliente_id,
+        "canais_usados": contagem
+    }
+
+
+# As 3 ferramentas abaixo sao o que o agente vai poder usar pra investigar
+# um cliente sinalizado. Cada uma responde uma pergunta diferente sobre
+# o comportamento do cliente.
+
+teste = ferramenta_historico_cliente(df, "CLI-003")
+print(teste)
+
+teste2 = ferramenta_operacoes_do_dia(df, "CLI-003", "2026-05-02")
+print(teste2)
+
+teste3 = ferramenta_perfil_por_canal(df, "CLI-003")
+print(teste3)
