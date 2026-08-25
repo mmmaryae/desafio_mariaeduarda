@@ -3,13 +3,15 @@ import os
 import json
 import time
 from dotenv import load_dotenv
-from tools import carregar_dados, aplicar_regras, ferramenta_historico_cliente, ferramenta_operacoes_do_dia, ferramenta_perfil_por_canal
+from tools import carregar_dados, aplicar_regras, listar_top_10_suspeitos, ferramenta_historico_cliente, ferramenta_operacoes_do_dia, ferramenta_perfil_por_canal
 
 load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
 
 df = carregar_dados()
 df, suspeitos_fracionamento = aplicar_regras(df)
+top_10_suspeitos = listar_top_10_suspeitos(df, suspeitos_fracionamento)
+clientes_fracionamento = set(suspeitos_fracionamento.index.get_level_values("cliente_id"))
 
 print("Ferramentas e dados carregados com sucesso")
 
@@ -92,8 +94,14 @@ def investigar_e_salvar(cliente_id, motivo_sinalizacao):
         }
         resposta = requests.post(url, headers=headers, json=corpo)
         resposta_json = resposta.json()
+
+        if "choices" not in resposta_json:
+            print("Erro da API:", resposta_json)
+            raise Exception(resposta_json.get("error", {}).get("message", "erro desconhecido"))
+
         tokens_totais += resposta_json.get("usage", {}).get("total_tokens", 0)
         mensagem_do_agente = resposta_json["choices"][0]["message"]
+        time.sleep(3)
 
         if "tool_calls" not in mensagem_do_agente:
             tempo_total = time.time() - inicio
@@ -118,5 +126,29 @@ def investigar_e_salvar(cliente_id, motivo_sinalizacao):
     return {"cliente_id": cliente_id, "erro": "excedeu limite de rodadas"}
 
 
-resultado_teste = investigar_e_salvar("CLI-003", "fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72")
-print(resultado_teste)
+
+
+resultados_top10 = []
+
+for cliente_id, flags in top_10_suspeitos:
+    if cliente_id in clientes_fracionamento:
+        datas_do_cliente = suspeitos_fracionamento[cliente_id].index
+        data_fracionamento = datas_do_cliente[0]
+        valor_fracionamento = suspeitos_fracionamento[cliente_id].iloc[0]
+        motivo = f"fracionamento detectado pela regra 1 no dia {data_fracionamento}, somando R$ {valor_fracionamento}"
+    else:
+        motivo = "valor atipico detectado pela regra 2 (verifique o historico do cliente)"
+
+    print(f"Investigando {cliente_id}...")
+    try:
+        resultado = investigar_e_salvar(cliente_id, motivo)
+    except Exception as erro:
+        resultado = {"cliente_id": cliente_id, "erro": str(erro)}
+        print(f"Erro ao investigar {cliente_id}: {erro}")
+    resultados_top10.append(resultado)
+    time.sleep(3)
+
+with open("../outputs/pareceres_agente.json", "w", encoding="utf-8") as arquivo_saida:
+    json.dump(resultados_top10, arquivo_saida, ensure_ascii=False, indent=2)
+
+print("Todos os pareceres foram salvos em outputs/pareceres_agente.json")
