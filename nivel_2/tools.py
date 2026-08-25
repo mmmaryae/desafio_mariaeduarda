@@ -90,15 +90,3 @@ def ferramenta_perfil_por_canal(df, cliente_id):
     }
 
 
-# As 3 ferramentas abaixo sao o que o agente vai poder usar pra investigar
-# um cliente sinalizado. Cada uma responde uma pergunta diferente sobre
-# o comportamento do cliente.
-
-teste = ferramenta_historico_cliente(df, "CLI-003")
-print(teste)
-
-teste2 = ferramenta_operacoes_do_dia(df, "CLI-003", "2026-05-02")
-print(teste2)
-
-teste3 = ferramenta_perfil_por_canal(df, "CLI-003")
-print(teste3)
