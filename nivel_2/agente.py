@@ -62,3 +62,21 @@ ferramentas_disponiveis = [
 print("Ferramentas descritas com sucesso")
 
 
+def investigar_cliente(cliente_id, motivo_sinalizacao):
+    mensagens = [
+        {"role": "user", "content": f"O cliente {cliente_id} foi sinalizado como suspeito pelo seguinte motivo: {motivo_sinalizacao}. Use as ferramentas disponiveis para investigar o comportamento dele e depois de o parecer final."}
+    ]
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    corpo = {
+        "model": "openai/gpt-oss-20b",
+        "messages": mensagens,
+        "tools": ferramentas_disponiveis
+    }
+    
+    resposta = requests.post(url, headers=headers, json=corpo)
+    return resposta.json()
+
+resultado = investigar_cliente("CLI-003", "fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72")
+print(resultado)
