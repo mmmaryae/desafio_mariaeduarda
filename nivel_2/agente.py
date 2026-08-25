@@ -80,3 +80,28 @@ def investigar_cliente(cliente_id, motivo_sinalizacao):
 
 resultado = investigar_cliente("CLI-003", "fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72")
 print(resultado)
+
+def executar_ferramenta(nome_ferramenta, argumentos, cliente_id_sinalizado, data_sinalizada):
+    args = json.loads(argumentos)
+    
+    if nome_ferramenta == "historico_cliente":
+        return ferramenta_historico_cliente(df, args["cliente_id"])
+    elif nome_ferramenta == "operacoes_do_dia":
+        return ferramenta_operacoes_do_dia(df, args["cliente_id"], args["data"])
+    elif nome_ferramenta == "perfil_por_canal":
+        return ferramenta_perfil_por_canal(df, args["cliente_id"])
+
+resultado = investigar_cliente("CLI-003", "fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72")
+
+mensagem_do_agente = resultado["choices"][0]["message"]
+
+if "tool_calls" in mensagem_do_agente:
+    chamada = mensagem_do_agente["tool_calls"][0]
+    nome_ferramenta = chamada["function"]["name"]
+    argumentos = chamada["function"]["arguments"]
+    
+    print(f"Agente pediu a ferramenta: {nome_ferramenta}")
+    resultado_ferramenta = executar_ferramenta(nome_ferramenta, argumentos, "CLI-003", "2026-05-02")
+    print("Resultado da ferramenta:", resultado_ferramenta)
+else:
+    print("Agente respondeu direto:", mensagem_do_agente["content"])
