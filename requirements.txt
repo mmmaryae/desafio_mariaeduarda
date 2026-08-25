@@ -1,0 +1,3 @@
+#pandas: para a limpeza e análise dos dados
+#requests: chamadas às APIs do Gemini e Groq
+#python-dotenv: para carregar a chave do .env
