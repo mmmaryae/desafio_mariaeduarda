@@ -1,6 +1,7 @@
 import requests
 import os
 import json
+import time
 from dotenv import load_dotenv
 from tools import carregar_dados, aplicar_regras, ferramenta_historico_cliente, ferramenta_operacoes_do_dia, ferramenta_perfil_por_canal
 
@@ -62,27 +63,12 @@ ferramentas_disponiveis = [
 print("Ferramentas descritas com sucesso")
 
 
-
-def investigar_cliente(cliente_id, motivo_sinalizacao):
-    mensagens = [
-        {"role": "user", "content": f"O cliente {cliente_id} foi sinalizado como suspeito pelo seguinte motivo: {motivo_sinalizacao}. Use as ferramentas disponiveis para investigar o comportamento dele e depois de o parecer final."}
-    ]
-
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    corpo = {
-        "model": "openai/gpt-oss-20b",
-        "messages": mensagens,
-        "tools": ferramentas_disponiveis
-    }
-
-    resposta = requests.post(url, headers=headers, json=corpo)
-    return resposta.json()
+url = "https://api.groq.com/openai/v1/chat/completions"
+headers = {"Authorization": f"Bearer {API_KEY}"}
 
 
 def executar_ferramenta(nome_ferramenta, argumentos):
     args = json.loads(argumentos)
-
     if nome_ferramenta == "historico_cliente":
         return ferramenta_historico_cliente(df, args["cliente_id"])
     elif nome_ferramenta == "operacoes_do_dia":
@@ -91,34 +77,46 @@ def executar_ferramenta(nome_ferramenta, argumentos):
         return ferramenta_perfil_por_canal(df, args["cliente_id"])
 
 
-mensagens = [
-    {"role": "user", "content": "O cliente CLI-003 foi sinalizado como suspeito pelo seguinte motivo: fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72. Use as ferramentas disponiveis para investigar o comportamento dele e depois de o parecer final."}
-]
+def investigar_e_salvar(cliente_id, motivo_sinalizacao):
+    mensagens = [
+        {"role": "user", "content": f"O cliente {cliente_id} foi sinalizado como suspeito pelo seguinte motivo: {motivo_sinalizacao}. Use as ferramentas disponiveis para investigar o comportamento dele e depois de o parecer final."}
+    ]
+    tokens_totais = 0
+    inicio = time.time()
 
-url = "https://api.groq.com/openai/v1/chat/completions"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+    for rodada in range(5):
+        corpo = {
+            "model": "openai/gpt-oss-20b",
+            "messages": mensagens,
+            "tools": ferramentas_disponiveis
+        }
+        resposta = requests.post(url, headers=headers, json=corpo)
+        resposta_json = resposta.json()
+        tokens_totais += resposta_json.get("usage", {}).get("total_tokens", 0)
+        mensagem_do_agente = resposta_json["choices"][0]["message"]
 
-for rodada in range(5):
-    corpo = {
-        "model": "openai/gpt-oss-20b",
-        "messages": mensagens,
-        "tools": ferramentas_disponiveis
-    }
-    resposta = requests.post(url, headers=headers, json=corpo)
-    mensagem_do_agente = resposta.json()["choices"][0]["message"]
+        if "tool_calls" not in mensagem_do_agente:
+            tempo_total = time.time() - inicio
+            return {
+                "cliente_id": cliente_id,
+                "motivo_sinalizacao": motivo_sinalizacao,
+                "parecer_final": mensagem_do_agente["content"],
+                "tokens_usados": tokens_totais,
+                "tempo_segundos": round(tempo_total, 2)
+            }
 
-    if "tool_calls" not in mensagem_do_agente:
-        print("Parecer final do agente:")
-        print(mensagem_do_agente["content"])
-        break
+        chamada = mensagem_do_agente["tool_calls"][0]
+        nome_ferramenta = chamada["function"]["name"]
+        argumentos = chamada["function"]["arguments"]
+        print(f"Rodada {rodada + 1}: agente pediu a ferramenta {nome_ferramenta}")
+        resultado_ferramenta = executar_ferramenta(nome_ferramenta, argumentos)
+        print("Resultado:", resultado_ferramenta)
 
-    chamada = mensagem_do_agente["tool_calls"][0]
-    nome_ferramenta = chamada["function"]["name"]
-    argumentos = chamada["function"]["arguments"]
+        mensagens.append({"role": "assistant", "content": None, "tool_calls": mensagem_do_agente["tool_calls"]})
+        mensagens.append({"role": "tool", "tool_call_id": chamada["id"], "content": json.dumps(resultado_ferramenta)})
 
-    print(f"Rodada {rodada + 1}: agente pediu a ferramenta {nome_ferramenta}")
-    resultado_ferramenta = executar_ferramenta(nome_ferramenta, argumentos)
-    print("Resultado:", resultado_ferramenta)
+    return {"cliente_id": cliente_id, "erro": "excedeu limite de rodadas"}
 
-    mensagens.append({"role": "assistant", "content": None, "tool_calls": mensagem_do_agente["tool_calls"]})
-    mensagens.append({"role": "tool", "tool_call_id": chamada["id"], "content": json.dumps(resultado_ferramenta)})
+
+resultado_teste = investigar_e_salvar("CLI-003", "fracionamento: 4 operacoes no dia 2026-05-02 somando R$ 50.846,72")
+print(resultado_teste)
